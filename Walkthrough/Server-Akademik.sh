@@ -1,4 +1,5 @@
 # Tahap 1
+# jangan lupa sudo su dulu yaaa
 
 # Konfigurasi Server Akademik
 hostnamectl set-hostname Server-Akademik

@@ -1,4 +1,6 @@
 # Bersihkan konfigurasi lama
+# jangan lupa sudo su dulu yaaa
+
 ip addr flush dev eth0 || true
 ip addr flush dev ens3 || true
 ip route flush all
@@ -14,3 +16,4 @@ echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
 # Test Ping ke Gateway
 ping -c 2 10.20.30.1
+

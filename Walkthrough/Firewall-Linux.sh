@@ -53,3 +53,7 @@ iptables -A FORWARD -m limit --limit 5/min -j LOG --log-prefix "FW-DROP: "
 echo "✅ Firewall-Linux Updated!"
 
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+ping -c 2 google.com
