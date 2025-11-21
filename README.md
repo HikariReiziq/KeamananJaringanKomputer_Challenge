@@ -33,7 +33,7 @@ Penyerang mengirimkan banjir paket SYN (*SYN Flood*) ke port 80 server akademik 
 ![Eksekusi Serangan](/Assets/Simulasi_Penyerangan/serangan_syn_flood.png)
 
 ### B. Monitoring Trafik di Core Router
-Lonjakan trafik dapat diamati pada *counter* `iptables` di Core Router. Hal ini membuktikan bahwa administrator jaringan memiliki visibilitas terhadap anomali trafik yang terjadi.
+Lonjakan trafik dapat diamati pada *counter* `iptables` di Core Router. Hal ini membuktikan bahwa administrator jaringan memiliki visibilitas terhadap anomali trafik yang terjadi. Bisa dilihat pada PKTS yang berjumlah 655K
 
 ![Monitoring Router](/Assets/Simulasi_Penyerangan/informasi_syn_flood_di_core_router.png)
 
@@ -47,9 +47,33 @@ Server mengalami kebanjiran permintaan koneksi palsu (*Half-open connections*). 
 
 ---
 
-## Kesimpulan Validasi
+## Kesimpulan Validasi Penyerangan
 
 Berdasarkan pengujian di atas, disimpulkan bahwa:
 1.  **Access Control List (ACL)** berfungsi dengan baik dalam membatasi akses ilegal (SSH) dari jaringan mahasiswa.
 2.  **Visibilitas Jaringan** terpenuhi, dimana lonjakan trafik akibat serangan dapat dipantau melalui log router.
 3.  **Sistem Pertahanan** berhasil memisahkan *traffic* manajemen (Admin) dari *traffic* publik, sehingga meskipun layanan web diserang, akses manajemen router tetap aman.
+
+
+## 3. Validasi Skalabilitas & High Availability (Load Balancing)
+
+**Tujuan:**
+Menguji kemampuan jaringan dalam menangani kolaborasi antar departemen dan skalabilitas layanan. Pengujian ini memverifikasi bahwa *Load Balancer* berfungsi mendistribusikan lalu lintas ke server yang berbeda (Riset & Smart City) melalui satu pintu masuk (*Single Point of Entry*).
+
+* **Tester:** Admin Workstation (Akses Penuh)
+* **Target:** Virtual IP Load Balancer (10.20.30.5)
+* **Mekanisme:** Round Robin Distribution
+
+### Hasil Pengujian
+Pengujian dilakukan dengan mengirimkan permintaan HTTP (`curl`) secara berulang ke IP Load Balancer.
+
+![Validasi Load Balancer](/Assets/Validasi_LoadBalancer.png)
+
+**Analisis Hasil:**
+Terlihat pada gambar di atas bahwa respon server berubah-ubah secara bergantian untuk setiap permintaan:
+1.  **Request ke-1:** Dilayani oleh `Server RISET & IOT`.
+2.  **Request ke-2:** Dilayani oleh `Server SMART CITY`.
+3.  **Request ke-3:** Kembali dilayani oleh `Server RISET & IOT`.
+
+**Kesimpulan:**
+Sistem berhasil mengimplementasikan **High Availability**. Penambahan layanan baru (Smart City) berhasil dilakukan tanpa mengganggu infrastruktur utama, dan mekanisme *Load Balancing* efektif membagi beban lalu lintas, memudahkan akses data bagi departemen yang berkepentingan tanpa harus menghafal banyak IP server.
