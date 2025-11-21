@@ -77,3 +77,33 @@ Terlihat pada gambar di atas bahwa respon server berubah-ubah secara bergantian 
 
 **Kesimpulan:**
 Sistem berhasil mengimplementasikan **High Availability**. Penambahan layanan baru (Smart City) berhasil dilakukan tanpa mengganggu infrastruktur utama, dan mekanisme *Load Balancing* efektif membagi beban lalu lintas, memudahkan akses data bagi departemen yang berkepentingan tanpa harus menghafal banyak IP server.
+
+## 4. Validasi Keamanan Perimeter (Firewall Functionality)
+
+**Tujuan:**
+Memverifikasi fungsi utama Firewall sebagai garis pertahanan terdepan (*Perimeter Defense*). Pengujian ini bertujuan membuktikan bahwa Firewall mampu memblokir akses tidak sah yang berasal dari luar jaringan (Internet/Edge Router) menuju server internal, serta memastikan tidak ada kebocoran paket ke dalam jaringan lokal.
+
+* **Attacker:** Edge Router (Simulasi Hacker/Orang Luar)
+* **Target:** Server Akademik (10.20.20.10)
+* **Tools:** Ping & Tcpdump (Network Forensics)
+
+### A. Eksekusi Serangan dari Luar
+Penyerang mencoba melakukan koneksi langsung (*Direct Ping*) ke server internal yang seharusnya tersembunyi di balik Firewall.
+
+![Eksekusi Serangan](/Assets/Validasi_Firewall/Mencoba%20serang%20ke%20firewall%20langsung.png)
+
+**Analisis:**
+Terlihat hasil **100% Packet Loss**. Penyerang tidak mendapatkan balasan apapun dari target, menandakan jalur koneksi terputus.
+
+### B. Analisis Forensik di Firewall
+Untuk membuktikan bahwa paket benar-benar diblokir oleh Firewall (bukan karena routing error atau server mati), dilakukan pemantauan paket (*sniffing*) langsung di mesin Firewall menggunakan `tcpdump`.
+
+![Forensik Firewall](/Assets/Validasi_Firewall/Capture_tcpdump_di_firewall.png)
+
+**Analisis Bukti:**
+Pada log `tcpdump` di atas terlihat fenomena penting:
+* **`eth0 In`**: Paket ICMP Request dari penyerang (`192.168.1.1`) terdeteksi **MASUK** ke interface luar Firewall.
+* **TIDAK ADA `eth1 Out`**: Tidak ada log paket yang diteruskan keluar menuju interface dalam.
+
+**Kesimpulan:**
+Firewall berfungsi sempurna. Paket serangan diterima, dianalisis, dan langsung **DIBUANG (DROPPED)** di tempat tanpa diteruskan ke jaringan internal. Hal ini membuktikan integritas keamanan perimeter terjaga dan tidak ada kebocoran lalu lintas (*traffic leak*).
