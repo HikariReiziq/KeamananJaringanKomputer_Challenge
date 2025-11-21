@@ -1,1 +1,1 @@
-ip dhcp #untuk mendapatkan IP dari Core Router
+ip dhcp 
