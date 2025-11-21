@@ -1,3 +1,9 @@
+#=============================================================
+
+#Tahap 1: Konfigurasi Core Router Linux
+
+#=============================================================
+
 #!/bin/bash
 # Script Konfigurasi Core-Router-Linux (ALL IN ONE)
 
@@ -64,3 +70,56 @@ iptables -A FORWARD -o eth0 -j ACCEPT
 iptables -A FORWARD -m limit --limit 5/min -j LOG --log-prefix "CORE-BLOCK: "
 
 echo "✅ Core Router Siap! (IP + ACL Loaded)"
+
+
+#=============================================================
+
+# Tahap 2: Konfigurasi DHCP Server di Core Router Linux
+
+#=============================================================
+
+# Izinkan Akademik akses Web ke Load Balancer Riset (Kolaborasi)
+iptables -A FORWARD -s 10.20.20.0/24 -d 10.20.30.5 -p tcp --dport 80 -j ACCEPT
+
+
+#!/bin/bash
+# Script Instalasi & Konfigurasi DHCP Server di Core Router
+
+# 1. Update & Install Paket DHCP
+echo "[*] Menginstal ISC DHCP Server..."
+apt update
+apt install -y isc-dhcp-server
+
+# 2. Tentukan Interface untuk DHCP
+# eth3 = Mahasiswa, eth5 = Guest
+echo "[*] Mengkonfigurasi Interface..."
+sed -i 's/INTERFACESv4=""/INTERFACESv4="eth3 eth5"/' /etc/default/isc-dhcp-server
+
+# 3. Buat Konfigurasi Subnet (Pool IP)
+echo "[*] Membuat Konfigurasi dhcpd.conf..."
+cat > /etc/dhcp/dhcpd.conf <<EOF
+default-lease-time 600;
+max-lease-time 7200;
+authoritative;
+
+# Subnet Mahasiswa (10.20.10.0/24)
+subnet 10.20.10.0 netmask 255.255.255.0 {
+    range 10.20.10.100 10.20.10.200;   # Range IP Dinamis
+    option routers 10.20.10.1;         # Gateway (Core Router)
+    option domain-name-servers 8.8.8.8;
+}
+
+# Subnet Guest (10.20.50.0/24)
+subnet 10.20.50.0 netmask 255.255.255.0 {
+    range 10.20.50.100 10.20.50.200;   # Range IP Dinamis
+    option routers 10.20.50.1;         # Gateway (Core Router)
+    option domain-name-servers 8.8.8.8;
+}
+EOF
+
+# 4. Restart Service DHCP
+echo "[*] Merestart Service DHCP..."
+service isc-dhcp-server restart
+service isc-dhcp-server status | grep active
+
+echo "✅ DHCP Server Siap melayani Mahasiswa & Guest!"
