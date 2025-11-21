@@ -1,3 +1,35 @@
+# Laporan Tugas Akhir - ITS Secure Network Challenge
+
+**Mata Kuliah:** Keamanan Jaringan Komputer  
+**Departemen:** Teknologi Informasi - ITS  
+**Kelas:** C - Kelompok 1
+
+## Anggota Kelompok
+
+| Nama | NRP |
+| :--- | :--- |
+| Syela Zeruya Tandi Lalong | 5027231076 |
+| Tasya Aulia Darmawan | 5027241009 |
+| Azaria Raissa Maulidinnisa | 5027241043 |
+| M. Hikari Reiziq Rakhmadinta | 5027241079 |
+| Ni'mah Fauziyyah Atok | 5027241103 |
+
+---
+
+## Desain Topologi Jaringan
+
+Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasikan. Topologi ini dirancang menggunakan prinsip **Defense in Depth** (Pertahanan Berlapis) dan **Modularitas** untuk menjamin keamanan, ketersediaan, dan kemudahan pengembangan.
+
+![Topologi Jaringan](/Assets/topologi.png)
+
+### Komponen Utama Topologi:
+1.  **Perimeter Security (Edge & Firewall):** Melindungi jaringan kampus dari ancaman eksternal dan menangani lalu lintas keluar-masuk internet (NAT).
+2.  **Internal Security (Core Router ACL):** Menerapkan segmentasi jaringan yang ketat antar departemen (Mahasiswa, Admin, Riset, Guest) untuk mencegah pergerakan lateral serangan.
+3.  **High Availability (Load Balancer):** Menggunakan Nginx Load Balancer pada subnet Riset untuk mendistribusikan beban lalu lintas ke Server Riset dan Server Smart City.
+4.  **Dynamic Addressing:** Implementasi DHCP Server pada Core Router untuk manajemen IP otomatis pada subnet publik (Mahasiswa & Guest).
+
+---
+
 # Laporan Simulasi Penyerangan & Validasi Keamanan Jaringan
 
 Dokumen ini berisi dokumentasi hasil pengujian keamanan (*Penetration Testing*) pada topologi infrastruktur jaringan yang telah dibangun. Pengujian dilakukan untuk memvalidasi efektivitas *Access Control List* (ACL) dan memantau dampak serangan terhadap server.
