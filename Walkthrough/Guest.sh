@@ -1,1 +1,1 @@
-ip 10.20.50.10/24 10.20.50.1
+ip dhcp #untuk mendapatkan IP dari Core Router

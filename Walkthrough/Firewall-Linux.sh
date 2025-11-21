@@ -47,6 +47,9 @@ iptables -A FORWARD -s 10.20.0.0/16 -i eth1 -o eth0 -j ACCEPT
 # Allow Firewall Management (Firewall ke Bawah)
 iptables -A FORWARD -s 10.20.0.1 -d 10.20.0.0/16 -j ACCEPT
 
+# [CRITICAL FIX] Izinkan paket balasan masuk ke Firewall (agar Ping/DNS jalan)
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
 # Logging
 iptables -A FORWARD -m limit --limit 5/min -j LOG --log-prefix "FW-DROP: "
 
