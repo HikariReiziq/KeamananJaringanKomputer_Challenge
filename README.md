@@ -139,3 +139,72 @@ Pada log `tcpdump` di atas terlihat fenomena penting:
 
 **Kesimpulan:**
 Firewall berfungsi sempurna. Paket serangan diterima, dianalisis, dan langsung **DIBUANG (DROPPED)** di tempat tanpa diteruskan ke jaringan internal. Hal ini membuktikan integritas keamanan perimeter terjaga dan tidak ada kebocoran lalu lintas (*traffic leak*).
+
+
+## 5. Validasi Advanced Security (Intrusion Detection System)
+
+**Tujuan:**
+Mengimplementasikan sistem pertahanan tingkat lanjut menggunakan **Suricata IDS** yang ditempatkan secara strategis di **Core Router**. Pengujian ini bertujuan untuk memverifikasi kemampuan sistem dalam mendeteksi pola lalu lintas mencurigakan dari dalam jaringan (*Insider Threat*) dan memantau dampak serangan pada sisi server.
+
+* **Detector:** Suricata IDS (Mode: *Network Intrusion Detection System*)
+* **Lokasi Sensor:** Core Router (Interface `eth3` - Gateway Mahasiswa)
+* **Attacker:** Mahasiswa (10.20.10.100)
+* **Target:** Server Akademik (10.20.20.10)
+
+### A. Deteksi Reconnaissance (Scanning)
+Pada tahap awal serangan, penyerang biasanya melakukan pemindaian untuk mencari celah. IDS dikonfigurasi untuk mengenali pola pemindaian ini.
+
+**Bukti Deteksi:**
+Ketika Mahasiswa melakukan `nmap` ke Server Akademik, IDS di Core Router langsung mencatat aktivitas tersebut sebagai potensi ancaman.
+
+![Log Deteksi Port Scan](/Assets/Simulasi_Penyerangan/nmap_mhs_ke_akademik.png)
+*(Gambar: Hasil Nmap dari sisi penyerang menunjukkan port SSH tertutup, namun aktivitas ini tertangkap oleh IDS)*
+
+**Analisis Teknis:**
+* **Signature Match:** Rule Suricata `sid:1000002` (*Percobaan Koneksi SSH*) terpicu karena adanya paket TCP SYN yang menuju ke port 22, meskipun koneksi tersebut akhirnya diblokir oleh ACL Router. Ini membuktikan IDS bekerja mendeteksi niat jahat sebelum blokir terjadi.
+
+---
+
+### B. Deteksi Serangan Denial of Service (SYN Flood)
+Penyerang melancarkan serangan banjir paket (*SYN Flood*) menggunakan `hping3` untuk melumpuhkan layanan web akademik.
+
+**Bukti Deteksi di Core Router:**
+Log IDS menunjukkan lonjakan peringatan (*alert*) yang masif dalam waktu singkat, menandakan adanya anomali lalu lintas.
+
+![Log Core IDS Attack](/Assets/Simulasi_Penyerangan/Log_Core_IDS_Attack.png)
+
+**Analisis Teknis:**
+* **Traffic Anomaly:** Log `CORE IDS: Akses Web Server Detected` muncul berulang kali dengan *timestamp* yang hampir bersamaan (milidetik).
+* **Threshold Trigger:** Rule deteksi DDoS (`sid:1000004`) mendeteksi volume paket SYN yang melebihi ambang batas wajar (*threshold*) dari satu alamat IP sumber (`10.20.10.100`) menuju satu tujuan (`10.20.20.10`).
+
+---
+
+### C. Dampak pada Sistem Target (Server Akademik)
+Serangan DDoS yang lolos dari ACL (karena menuju port 80 yang diizinkan) akan membebani server target.
+
+**Bukti Log Sistem Server:**
+Kernel Linux pada Server Akademik mendeteksi kebanjiran permintaan koneksi dan mengaktifkan mekanisme pertahanan diri.
+
+![Log Kernel Server](/Assets/Simulasi_Penyerangan/server_syn_flood_log.png)
+*(Gambar: Pesan "Possible SYN flooding on port 80" pada terminal Server Akademik)*
+
+**Analisis Dampak:**
+* **Resource Exhaustion:** Pesan log tersebut muncul karena *backlog queue* untuk koneksi TCP pada server telah penuh.
+* **Mitigasi Otomatis:** Sistem operasi secara otomatis mengaktifkan **TCP SYN Cookies**. Ini adalah mekanisme pertahanan di mana server tidak lagi mengalokasikan memori untuk menyimpan status koneksi setengah terbuka (*half-open*), melainkan mengenkripsi informasi koneksi ke dalam *sequence number* (cookie) untuk mencegah server *crash* akibat kehabisan memori.
+
+---
+
+## 6. Kesimpulan Akhir & Evaluasi Sistem
+
+Berdasarkan seluruh rangkaian pengujian, berikut adalah evaluasi akhir terhadap sistem keamanan jaringan yang telah dibangun:
+
+| Komponen | Fungsi Utama | Status Validasi | Keterangan |
+| :--- | :--- | :--- | :--- |
+| **Firewall (Edge)** | Perimeter Security & NAT | ✅ **BERHASIL** | Berhasil memblokir serangan ping dari luar (Edge Router) dan menyembunyikan IP internal (NAT Masquerade). |
+| **ACL (Core Router)** | Internal Segmentation | ✅ **BERHASIL** | Berhasil memblokir akses Mahasiswa ke Admin & Riset (True Negative) namun tetap mengizinkan akses Web Akademik (True Positive). |
+| **Load Balancer** | High Availability | ✅ **BERHASIL** | Trafik Web Riset terbagi rata (*Round Robin*) antara Server Riset dan Server Smart City, meningkatkan ketersediaan layanan. |
+| **IDS (Suricata)** | Detection & Visibility | ✅ **BERHASIL** | Mampu mendeteksi serangan *scanning* dan DDoS secara *real-time*, memberikan visibilitas penuh kepada administrator terhadap ancaman internal. |
+| **DHCP Server** | Dynamic Addressing | ✅ **BERHASIL** | Manajemen IP otomatis berjalan lancar untuk klien dinamis (Mahasiswa & Guest). |
+
+**Rekomendasi Pengembangan:**
+Untuk pengembangan selanjutnya, sistem ini dapat ditingkatkan dengan mengintegrasikan Suricata dalam mode **IPS (Intrusion Prevention System)** agar dapat memblokir serangan DDoS secara otomatis tanpa intervensi manual, serta menggunakan **SIEM (Security Information and Event Management)** untuk sentralisasi log dari Firewall dan Core Router.
