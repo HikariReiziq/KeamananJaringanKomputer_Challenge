@@ -171,7 +171,7 @@ Penyerang melancarkan serangan banjir paket (*SYN Flood*) menggunakan `hping3` u
 **Bukti Deteksi di Core Router:**
 Log IDS menunjukkan lonjakan peringatan (*alert*) yang masif dalam waktu singkat, menandakan adanya anomali lalu lintas.
 
-![Log Core IDS Attack](/Assets/Simulasi_Penyerangan/Log_Core_IDS_Attack.png)
+![Log Core IDS Attack](/Assets/Simulasi_Penyerangan/log_core_router.png)
 
 **Analisis Teknis:**
 * **Traffic Anomaly:** Log `CORE IDS: Akses Web Server Detected` muncul berulang kali dengan *timestamp* yang hampir bersamaan (milidetik).
@@ -185,7 +185,7 @@ Serangan DDoS yang lolos dari ACL (karena menuju port 80 yang diizinkan) akan me
 **Bukti Log Sistem Server:**
 Kernel Linux pada Server Akademik mendeteksi kebanjiran permintaan koneksi dan mengaktifkan mekanisme pertahanan diri.
 
-![Log Kernel Server](/Assets/Simulasi_Penyerangan/server_syn_flood_log.png)
+![Log Kernel Server](/Assets/Simulasi_Penyerangan/serangan_syn_flood.png)
 *(Gambar: Pesan "Possible SYN flooding on port 80" pada terminal Server Akademik)*
 
 **Analisis Dampak:**
