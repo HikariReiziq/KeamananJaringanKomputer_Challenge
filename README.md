@@ -2,7 +2,7 @@
 
 **Mata Kuliah:** Keamanan Jaringan Komputer  
 **Departemen:** Teknologi Informasi - ITS  
-**Kelas:** C - Kelompok 1
+**Kelas:** C - Kelompok 1 <br>
 **Judul:** Deteksi Serangan Menggunakan IDS Suricata/Snort
 
 ## Anggota Kelompok
