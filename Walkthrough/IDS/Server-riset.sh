@@ -25,7 +25,3 @@ echo "<h1>DATA RAHASIA RISET</h1>" > /var/www/html/rahasia.txt
 service apache2 restart
 
 echo "✅ Server Riset Siap!"
-EOF
-
-chmod +x Server-Riset.sh
-./Server-Riset.sh

@@ -20,7 +20,3 @@ ip route add 10.20.0.0/16 via 192.168.1.2
 
 echo "✅ Edge Router Siap. Test Ping..."
 ping -c 2 8.8.8.8
-EOF
-
-chmod +x Edge-Router.sh
-./Edge-Router.sh

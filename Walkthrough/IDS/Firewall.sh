@@ -23,7 +23,3 @@ iptables -A FORWARD -s 10.20.0.1 -j ACCEPT
 
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 echo "✅ Firewall Siap."
-EOF
-
-chmod +x Firewall.sh
-./Firewall.sh

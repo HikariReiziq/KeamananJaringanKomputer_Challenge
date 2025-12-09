@@ -23,7 +23,3 @@ apt -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update
 apt install -y nmap
 
 echo "✅ Mahasiswa Siap (IP: 10.20.10.99)"
-EOF
-
-chmod +x Mahasiswa.sh
-./Mahasiswa.sh

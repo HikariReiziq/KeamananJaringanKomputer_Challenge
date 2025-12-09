@@ -76,7 +76,3 @@ RULES
 
 ethtool -K \$INT rx off tx off sg off gso off gro off
 echo "✅ IDS SIAP (Rules Optimized)!"
-EOF
-
-chmod +x IDS-Master-Setup.sh
-./IDS-Master-Setup.sh

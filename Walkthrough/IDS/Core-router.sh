@@ -70,7 +70,3 @@ sed -i 's/INTERFACESv4=""/INTERFACESv4="eth3 eth5"/' /etc/default/isc-dhcp-serve
 service isc-dhcp-server restart
 
 echo "✅ Core Router Final Siap!"
-EOF
-
-chmod +x Core-Router.sh
-./Core-Router.sh
