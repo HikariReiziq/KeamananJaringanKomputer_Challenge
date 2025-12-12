@@ -29,6 +29,10 @@ Departemen Teknologi Informasi ITS melaporkan adanya indikasi kebocoran data ber
 Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasikan. Topologi ini dirancang menggunakan prinsip **Defense in Depth** (Pertahanan Berlapis) dan **Modularitas** untuk menjamin keamanan, ketersediaan, dan kemudahan pengembangan.
 
 ![Topologi Jaringan](/Assets/topologi.png)
+**Lokasi IDS:** Node Terpisah (Out-of-Band) yang terhubung ke interface `eth6` pada **Core Router**.
+**Alasan Pemilihan (Traffic Mirroring):**
+* **Visibilitas Sentral:** Core Router adalah titik temu antar-subnet (Mahasiswa XXX Riset).
+* **Kinerja:** Memisahkan IDS dari jalur utama (bukan inline) menjaga throughput jaringan tetap stabil.
 
 ### Komponen Utama Topologi:
 1.  **Perimeter Security (Edge & Firewall):** Melindungi jaringan kampus dari ancaman eksternal dan menangani lalu lintas keluar-masuk internet (NAT).
@@ -38,209 +42,106 @@ Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasik
 
 ---
 
-## Custom Rules
+## Konfigurasi IDS
 
-1. Deteksi Port Scanning (Reconnaissance)
+**1. Arsitektur Operasi & Interface**
+
+| Parameter | Detail | Keterangan |
+| :--- | :--- | :--- |
+| Node Suricata | Node Terpisah (Out-of-Band) | Tidak menghalangi traffic utama |
+| Interface Monitor | eth0 | Menerima mirroring paket dari Core Router |
+| Operation Mode | Passive/Monitor Mode | Dijalankan dengan ```-i $INT``` |
+| Optimasi Kinerja | ```ethtool -K \$INT rx off ...``` | Optimasi kernel pada NIC untuk mengurangi beban CPU (offloading checksums, dll.) |
+
+**2. Variabel Jaringan Utama**
+
+| Variabel Jaringan | Value | Keterangan |
+| :--- | :--- | :--- |
+| HOME_NET | [10.0.0.0/8, 192.168.0.0/16] | Mencakup seluruh jaringan internal ITS (termasuk Riset 10.20.30.0/24 dan Akademik 10.20.20.0/24). |
+| EXTERNAL_NET | !$HOME_NET | Semua, kecuali HOME_NET|
+| Packet Acquisition | af-packet | Untuk efisiensi tinggi dalam membaca packet yang di mirror |
+
+## Custom Rules
+### Files: 
+```tugas.rules```
+
+1. Deteksi Port Scanning (SID: 1001) (Reconnaissance)
 
 ```
-alert tcp any any -> $HOME_NET [22,80,443] (msg:"[BAHAYA] Port Scanning Terdeteksi (SYN Scan)"; flags:S; threshold: type both, track by_src, count 20, seconds 10; sid:1001; rev:1; classtype:attempted-recon;)
+alert tcp 10.20.10.0/24 any -> 10.20.30.0/24 any (msg:"[BAHAYA] Port Scanning Terdeteksi (SYN Scan)"; flags:S; threshold: type both, track by_src, count 5, seconds 10; classtype:attempted-recon; sid:1001; rev:7;)
 ```
   
-Rule ini mendeteksi jika ada satu IP asal yang mengirimkan lebih dari 20 paket `SYN` (inisiasi koneksi) dalam waktu 10 detik menuju port kritis (SSH, HTTP, HTTPS) di jaringan internal.
+Rule ini mendeteksi jika IP dari subnet Mahasiswa (10.20.10.0/24) mengirimkan 5 paket SYN (inisiasi koneksi) dalam waktu 10 detik menuju subnet Riset, mengindikasikan upaya pemindaian cepat.
     
-2. Deteksi Brute Force SSH
-    
-```
-alert tcp any any -> $HOME_NET 22 (msg:"[KRITIS] Percobaan Brute Force SSH (3x Percobaan)"; flow:to_server,established; content:"SSH-"; nocase; threshold: type both, track by_src, count 3, seconds 30; sid:1002; rev:1; classtype:attempted-admin;)
-```
-    
-Rule ini memantau lalu lintas ke port 22 yang mengandung protokol "SSH-" dan memberikan peringatan jika terdeteksi lebih dari 3 percobaan koneksi SSH baru dari sumber yang sama dalam waktu 30 detik.
-    
-3. Deteksi Data Exfiltration (Pencurian Data)
+2. Deteksi Brute Force SSH (SID: 1002)
     
 ```
-alert tcp $HOME_NET 80 -> $EXTERNAL_NET any (msg:"[ALERT] Indikasi Pencurian Data via HTTP (Exfiltration)"; flow:from_server,established; content:"HTTP/1."; content:"200 OK"; distance:0; sid:1003; rev:1; classtype:policy-violation;)
+alert tcp any any -> 10.20.30.10 22 (msg:"[KRITIS] Percobaan Brute Force SSH (3x Percobaan)"; flags:S; threshold: type both, track by_src, count 3, seconds 30; classtype:attempted-admin; sid:1002; rev:7;)
 ```
     
-Rule ini mendeteksi respons sukses HTTP (`200 OK`) yang mengalir keluar **dari** Server Riset (`$HOME_NET`) **menuju** Mahasiswa (`$EXTERNAL_NET`), yang mengindikasikan keberhasilan pengunduhan file/data.
+Rule ini memicu peringatan jika terdeteksi lebih dari 3 percobaan koneksi SSH (melalui flag SYN) dari sumber manapun menuju IP Server Riset (10.20.30.10) dalam waktu 30 detik.
+    
+3. Deteksi Data Exfiltration (SID: 1003) (Pencurian Data)
+    
+```
+alert ip 10.20.30.10 any -> 10.20.10.0/24 any (msg:"[ALERT] Indikasi Pencurian Data via HTTP (Exfiltration)"; content:"HTTP"; flow:from_server,established; threshold: type limit, track by_src, count 1, seconds 60; classtype:policy-violation; sid:1003; rev:7;)
+```
+    
+Rule ini mendeteksi aktivitas transfer file yang keluar (flow:from_server,established) dari Server Riset (10.20.30.10) menuju Subnet Mahasiswa (10.20.10.0/24) yang menggunakan protokol HTTP. Log dibatasi (anti-spam) menjadi 1x per menit.
+
+4. Deteksi Ping Test (SID: 1004)
+
+```
+alert icmp any any -> any any (msg:"[INFO] Paket ICMP Ping Terdeteksi (Log Dibatasi)"; itype:8; threshold: type limit, track by_src, count 1, seconds 60; classtype:misc-activity; sid:1004; rev:7;)
+```
+
+Rule ini mendeteksi paket ICMP Echo Request (itype:8) dan mencatatnya sebagai informasi. Log dibatasi (anti-spam) menjadi 1x per menit.
 
 ---
+## Simulasi Serangan
 
-# Laporan Simulasi Penyerangan & Validasi Keamanan Jaringan
+1. Port Scanning (Nmap)
 
-Dokumen ini berisi dokumentasi hasil pengujian keamanan (*Penetration Testing*) pada topologi infrastruktur jaringan yang telah dibangun. Pengujian dilakukan untuk memvalidasi efektivitas *Access Control List* (ACL) dan memantau dampak serangan terhadap server.
+Command:
 
-## 1. Skenario Pengujian: Port Scanning (Reconnaissance)
+```
+nmap -p 22,80,443 --open 10.20.30.10
+```
 
-**Tujuan:** Memastikan bahwa aturan Firewall/ACL di Core Router berhasil menyembunyikan port sensitif (SSH) dari pengguna yang tidak berhak (Mahasiswa), namun tetap mengizinkan akses ke layanan publik (Web Server).
+Log Alert IDS:
+[masukin docum nmap raissa]
 
-* **Attacker:** Mahasiswa (10.20.10.100)
-* **Target:** Server Akademik (10.20.20.10)
-* **Tools:** Nmap
+2. SSH Brute Force
 
-### Hasil Pengujian
-![Hasil Nmap](/Assets/Simulasi_Penyerangan/nmap_mhs_ke_akademik.png)
+Command:
 
-**Analisis:**
-* **Port 22 (SSH) - `filtered`:** Paket permintaan koneksi berhasil dibuang (*DROP*) oleh Core Router sebelum mencapai server. Ini membuktikan segmentasi jaringan aman.
-* **Port 80 (HTTP) - `open`:** Layanan web dapat diakses secara normal oleh mahasiswa sesuai kebijakan layanan publik.
+```
+for i in {1..5}; do ssh -o ConnectTimeout=2 -o BatchMode=yes targetuser@10.20.30.10 "exit"; done
+```
+[masukin docum ssh brutfor raissa]
 
----
+3. Data Exflitration (HTTP Wget)
 
-## 2. Skenario Pengujian: Denial of Service (SYN Flood)
+Command: 
 
-**Tujuan:** Menguji ketahanan jaringan dan memverifikasi bahwa lalu lintas serangan dapat dipantau melalui Core Router serta melihat dampaknya pada sisi server.
+```
+wget http://10.20.30.10/index.html
+```
+[masukin docum data exfiltration raissa]
 
-* **Attacker:** Mahasiswa
-* **Target:** Server Akademik (Port 80)
-* **Tools:** Hping3
+Log Alert IDS:
 
-### A. Pelaksanaan Serangan
-Penyerang mengirimkan banjir paket SYN (*SYN Flood*) ke port 80 server akademik untuk memenuhi antrian koneksi server.
-
-![Eksekusi Serangan](/Assets/Simulasi_Penyerangan/serangan_syn_flood.png)
-
-### B. Monitoring Trafik di Core Router
-Lonjakan trafik dapat diamati pada *counter* `iptables` di Core Router. Hal ini membuktikan bahwa administrator jaringan memiliki visibilitas terhadap anomali trafik yang terjadi. Bisa dilihat pada PKTS yang berjumlah 655K
-
-![Monitoring Router](/Assets/Simulasi_Penyerangan/informasi_syn_flood_di_core_router.png)
-
-### C. Dampak pada Server Target
-Server mengalami kebanjiran permintaan koneksi palsu (*Half-open connections*). Terlihat banyaknya status `SYN_RECV` pada monitoring soket server, yang mengindikasikan server sedang menahan sumber daya untuk koneksi yang tidak pernah selesai (ciri khas serangan SYN Flood).
-
-![Dampak Server 1](/Assets/Simulasi_Penyerangan/Informasi_syn_flood_di_server_akademik.png)
-
-*(Detail status koneksi saat serangan berlangsung)*
-![Dampak Server 2](/Assets/Simulasi_Penyerangan/efek_syn_flood.png)
+[masukin docum data exfiltration_alert_ raissa]
 
 ---
+## Hasil Analisis Singkat
 
-## Kesimpulan Validasi Penyerangan
+   Serangan Port Scanning adalah yang paling mudah dan cepat memicu alert. Hal ini karena Nmap mengirimkan paket SYN dalam jumlah masif dalam waktu sangat singkat, sehingga langsung memicu ambang batas (threshold) pada rule IDS tanpa ambiguitas.
+    
+   Dalam simulasi ini, false positive ditekan seminimal mungkin dengan mendefinisikan $HOME_NET dan $EXTERNAL_NET secara spesifik. Namun, rule Data Exfiltration berpotensi menghasilkan false positive jika Mahasiswa memang diizinkan mengakses halaman web publik di server Riset, karena setiap respon "200 OK" akan dianggap sebagai pencurian data. Perlu penyesuaian rule content (misal: hanya mendeteksi file .conf atau .pdf rahasia).
+    
+   **Enkripsi:** Saat ini deteksi exfiltration hanya bekerja pada HTTP (Plaintext). Jika Server Riset menggunakan HTTPS (Port 443), IDS tidak akan bisa membaca konten "200 OK" atau nama file tanpa melakukan *SSL Termination/Inspection*.
 
-Berdasarkan pengujian di atas, disimpulkan bahwa:
-1.  **Access Control List (ACL)** berfungsi dengan baik dalam membatasi akses ilegal (SSH) dari jaringan mahasiswa.
-2.  **Visibilitas Jaringan** terpenuhi, dimana lonjakan trafik akibat serangan dapat dipantau melalui log router.
-3.  **Sistem Pertahanan** berhasil memisahkan *traffic* manajemen (Admin) dari *traffic* publik, sehingga meskipun layanan web diserang, akses manajemen router tetap aman.
-
-
-## 3. Validasi Skalabilitas & High Availability (Load Balancing)
-
-**Tujuan:**
-Menguji kemampuan jaringan dalam menangani kolaborasi antar departemen dan skalabilitas layanan. Pengujian ini memverifikasi bahwa *Load Balancer* berfungsi mendistribusikan lalu lintas ke server yang berbeda (Riset & Smart City) melalui satu pintu masuk (*Single Point of Entry*).
-
-* **Tester:** Admin Workstation (Akses Penuh)
-* **Target:** Virtual IP Load Balancer (10.20.30.5)
-* **Mekanisme:** Round Robin Distribution
-
-### Hasil Pengujian
-Pengujian dilakukan dengan mengirimkan permintaan HTTP (`curl`) secara berulang ke IP Load Balancer.
-
-![Validasi Load Balancer](/Assets/Validasi_LoadBalancer.png)
-
-**Analisis Hasil:**
-Terlihat pada gambar di atas bahwa respon server berubah-ubah secara bergantian untuk setiap permintaan:
-1.  **Request ke-1:** Dilayani oleh `Server RISET & IOT`.
-2.  **Request ke-2:** Dilayani oleh `Server SMART CITY`.
-3.  **Request ke-3:** Kembali dilayani oleh `Server RISET & IOT`.
-
-**Kesimpulan:**
-Sistem berhasil mengimplementasikan **High Availability**. Penambahan layanan baru (Smart City) berhasil dilakukan tanpa mengganggu infrastruktur utama, dan mekanisme *Load Balancing* efektif membagi beban lalu lintas, memudahkan akses data bagi departemen yang berkepentingan tanpa harus menghafal banyak IP server.
-
-## 4. Validasi Keamanan Perimeter (Firewall Functionality)
-
-**Tujuan:**
-Memverifikasi fungsi utama Firewall sebagai garis pertahanan terdepan (*Perimeter Defense*). Pengujian ini bertujuan membuktikan bahwa Firewall mampu memblokir akses tidak sah yang berasal dari luar jaringan (Internet/Edge Router) menuju server internal, serta memastikan tidak ada kebocoran paket ke dalam jaringan lokal.
-
-* **Attacker:** Edge Router (Simulasi Hacker/Orang Luar)
-* **Target:** Server Akademik (10.20.20.10)
-* **Tools:** Ping & Tcpdump (Network Forensics)
-
-### A. Eksekusi Serangan dari Luar
-Penyerang mencoba melakukan koneksi langsung (*Direct Ping*) ke server internal yang seharusnya tersembunyi di balik Firewall.
-
-![Eksekusi Serangan](/Assets/Validasi_Firewall/Mencoba%20serang%20ke%20firewall%20langsung.png)
-
-**Analisis:**
-Terlihat hasil **100% Packet Loss**. Penyerang tidak mendapatkan balasan apapun dari target, menandakan jalur koneksi terputus.
-
-### B. Analisis Forensik di Firewall
-Untuk membuktikan bahwa paket benar-benar diblokir oleh Firewall (bukan karena routing error atau server mati), dilakukan pemantauan paket (*sniffing*) langsung di mesin Firewall menggunakan `tcpdump`.
-
-![Forensik Firewall](/Assets/Validasi_Firewall/Capture_tcpdump_di_firewall.png)
-
-**Analisis Bukti:**
-Pada log `tcpdump` di atas terlihat fenomena penting:
-* **`eth0 In`**: Paket ICMP Request dari penyerang (`192.168.1.1`) terdeteksi **MASUK** ke interface luar Firewall.
-* **TIDAK ADA `eth1 Out`**: Tidak ada log paket yang diteruskan keluar menuju interface dalam.
-
-**Kesimpulan:**
-Firewall berfungsi sempurna. Paket serangan diterima, dianalisis, dan langsung **DIBUANG (DROPPED)** di tempat tanpa diteruskan ke jaringan internal. Hal ini membuktikan integritas keamanan perimeter terjaga dan tidak ada kebocoran lalu lintas (*traffic leak*).
-
-
-## 5. Validasi Advanced Security (Intrusion Detection System)
-
-**Tujuan:**
-Mengimplementasikan sistem pertahanan tingkat lanjut menggunakan **Suricata IDS** yang ditempatkan secara strategis di **Core Router**. Pengujian ini bertujuan untuk memverifikasi kemampuan sistem dalam mendeteksi pola lalu lintas mencurigakan dari dalam jaringan (*Insider Threat*) dan memantau dampak serangan pada sisi server.
-
-* **Detector:** Suricata IDS (Mode: *Network Intrusion Detection System*)
-* **Lokasi Sensor:** Core Router (Interface `eth3` - Gateway Mahasiswa)
-* **Attacker:** Mahasiswa (10.20.10.100)
-* **Target:** Server Akademik (10.20.20.10)
-
-### A. Deteksi Reconnaissance (Scanning)
-Pada tahap awal serangan, penyerang biasanya melakukan pemindaian untuk mencari celah. IDS dikonfigurasi untuk mengenali pola pemindaian ini.
-
-**Bukti Deteksi:**
-Ketika Mahasiswa melakukan `nmap` ke Server Akademik, IDS di Core Router langsung mencatat aktivitas tersebut sebagai potensi ancaman.
-
-![Log Deteksi Port Scan](/Assets/Simulasi_Penyerangan/nmap_mhs_ke_akademik.png)
-*(Gambar: Hasil Nmap dari sisi penyerang menunjukkan port SSH tertutup, namun aktivitas ini tertangkap oleh IDS)*
-
-**Analisis Teknis:**
-* **Signature Match:** Rule Suricata `sid:1000002` (*Percobaan Koneksi SSH*) terpicu karena adanya paket TCP SYN yang menuju ke port 22, meskipun koneksi tersebut akhirnya diblokir oleh ACL Router. Ini membuktikan IDS bekerja mendeteksi niat jahat sebelum blokir terjadi.
-
----
-
-### B. Deteksi Serangan Denial of Service (SYN Flood)
-Penyerang melancarkan serangan banjir paket (*SYN Flood*) menggunakan `hping3` untuk melumpuhkan layanan web akademik.
-
-**Bukti Deteksi di Core Router:**
-Log IDS menunjukkan lonjakan peringatan (*alert*) yang masif dalam waktu singkat, menandakan adanya anomali lalu lintas.
-
-![Log Core IDS Attack](/Assets/Simulasi_Penyerangan/log_core_router.png)
-
-**Analisis Teknis:**
-* **Traffic Anomaly:** Log `CORE IDS: Akses Web Server Detected` muncul berulang kali dengan *timestamp* yang hampir bersamaan (milidetik).
-* **Threshold Trigger:** Rule deteksi DDoS (`sid:1000004`) mendeteksi volume paket SYN yang melebihi ambang batas wajar (*threshold*) dari satu alamat IP sumber (`10.20.10.100`) menuju satu tujuan (`10.20.20.10`).
-
----
-
-### C. Dampak pada Sistem Target (Server Akademik)
-Serangan DDoS yang lolos dari ACL (karena menuju port 80 yang diizinkan) akan membebani server target.
-
-**Bukti Log Sistem Server:**
-Kernel Linux pada Server Akademik mendeteksi kebanjiran permintaan koneksi dan mengaktifkan mekanisme pertahanan diri.
-
-![Log Kernel Server](/Assets/Simulasi_Penyerangan/serangan_syn_flood.png)
-*(Gambar: Pesan "Possible SYN flooding on port 80" pada terminal Server Akademik)*
-
-**Analisis Dampak:**
-* **Resource Exhaustion:** Pesan log tersebut muncul karena *backlog queue* untuk koneksi TCP pada server telah penuh.
-* **Mitigasi Otomatis:** Sistem operasi secara otomatis mengaktifkan **TCP SYN Cookies**. Ini adalah mekanisme pertahanan di mana server tidak lagi mengalokasikan memori untuk menyimpan status koneksi setengah terbuka (*half-open*), melainkan mengenkripsi informasi koneksi ke dalam *sequence number* (cookie) untuk mencegah server *crash* akibat kehabisan memori.
-
----
-
-## 6. Kesimpulan Akhir & Evaluasi Sistem
-
-Berdasarkan seluruh rangkaian pengujian, berikut adalah evaluasi akhir terhadap sistem keamanan jaringan yang telah dibangun:
-
-| Komponen | Fungsi Utama | Status Validasi | Keterangan |
-| :--- | :--- | :--- | :--- |
-| **Firewall (Edge)** | Perimeter Security & NAT | ✅ **BERHASIL** | Berhasil memblokir serangan ping dari luar (Edge Router) dan menyembunyikan IP internal (NAT Masquerade). |
-| **ACL (Core Router)** | Internal Segmentation | ✅ **BERHASIL** | Berhasil memblokir akses Mahasiswa ke Admin & Riset (True Negative) namun tetap mengizinkan akses Web Akademik (True Positive). |
-| **Load Balancer** | High Availability | ✅ **BERHASIL** | Trafik Web Riset terbagi rata (*Round Robin*) antara Server Riset dan Server Smart City, meningkatkan ketersediaan layanan. |
-| **IDS (Suricata)** | Detection & Visibility | ✅ **BERHASIL** | Mampu mendeteksi serangan *scanning* dan DDoS secara *real-time*, memberikan visibilitas penuh kepada administrator terhadap ancaman internal. |
-| **DHCP Server** | Dynamic Addressing | ✅ **BERHASIL** | Manajemen IP otomatis berjalan lancar untuk klien dinamis (Mahasiswa & Guest). |
-
-**Rekomendasi Pengembangan:**
-Untuk pengembangan selanjutnya, sistem ini dapat ditingkatkan dengan mengintegrasikan Suricata dalam mode **IPS (Intrusion Prevention System)** agar dapat memblokir serangan DDoS secara otomatis tanpa intervensi manual, serta menggunakan **SIEM (Security Information and Event Management)** untuk sentralisasi log dari Firewall dan Core Router.
+   
+   **IPS:** Mengubah mode dari IDS (Deteksi) menjadi IPS (Pencegahan) agar Core Router dapat memblokir IP penyerang secara otomatis setelah alert muncul.
+an selanjutnya, sistem ini dapat ditingkatkan dengan mengintegrasikan Suricata dalam mode **IPS (Intrusion Prevention System)** agar dapat memblokir serangan DDoS secara otomatis tanpa intervensi manual, serta menggunakan **SIEM (Security Information and Event Management)** untuk sentralisasi log dari Firewall dan Core Router.
