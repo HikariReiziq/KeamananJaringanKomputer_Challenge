@@ -16,7 +16,14 @@
 | Ni'mah Fauziyyah Atok | 5027241103 |
 
 ---
+## Latar Belakang
 
+Departemen Teknologi Informasi ITS melaporkan adanya indikasi kebocoran data berskala kecil pada subnet Riset & IoT (10.20.30.0/24). Berdasarkan log firewall, terdeteksi adanya lonjakan lalu lintas mencurigakan yang berasal dari subnet Mahasiswa (10.20.10.0/24). Untuk itu, tim ditugaskan melakukan pemasangan IDS (Suricata/Snort dalam mode monitoring) guna mendeteksi pola serangan yang tidak dapat dideteksi oleh firewall. Berikut adalah beberapa kejanggalan yang ditemukan:
+
+1.  **Scanning:** Pencarian port terbuka.
+2.  **Brute Force:** Upaya paksa masuk ke server.
+3.  **Exfiltration:** Pengambilan data rahasia.
+   
 ## Desain Topologi Jaringan
 
 Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasikan. Topologi ini dirancang menggunakan prinsip **Defense in Depth** (Pertahanan Berlapis) dan **Modularitas** untuk menjamin keamanan, ketersediaan, dan kemudahan pengembangan.
@@ -28,6 +35,34 @@ Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasik
 2.  **Internal Security (Core Router ACL):** Menerapkan segmentasi jaringan yang ketat antar departemen (Mahasiswa, Admin, Riset, Guest) untuk mencegah pergerakan lateral serangan.
 3.  **High Availability (Load Balancer):** Menggunakan Nginx Load Balancer pada subnet Riset untuk mendistribusikan beban lalu lintas ke Server Riset dan Server Smart City.
 4.  **Dynamic Addressing:** Implementasi DHCP Server pada Core Router untuk manajemen IP otomatis pada subnet publik (Mahasiswa & Guest).
+
+---
+
+## Custom Rules
+
+1. Deteksi Port Scanning (Reconnaissance)
+
+```
+alert tcp any any -> $HOME_NET [22,80,443] (msg:"[BAHAYA] Port Scanning Terdeteksi (SYN Scan)"; flags:S; threshold: type both, track by_src, count 20, seconds 10; sid:1001; rev:1; classtype:attempted-recon;)
+```
+  
+Rule ini mendeteksi jika ada satu IP asal yang mengirimkan lebih dari 20 paket `SYN` (inisiasi koneksi) dalam waktu 10 detik menuju port kritis (SSH, HTTP, HTTPS) di jaringan internal.
+    
+2. Deteksi Brute Force SSH
+    
+```
+alert tcp any any -> $HOME_NET 22 (msg:"[KRITIS] Percobaan Brute Force SSH (3x Percobaan)"; flow:to_server,established; content:"SSH-"; nocase; threshold: type both, track by_src, count 3, seconds 30; sid:1002; rev:1; classtype:attempted-admin;)
+```
+    
+Rule ini memantau lalu lintas ke port 22 yang mengandung protokol "SSH-" dan memberikan peringatan jika terdeteksi lebih dari 3 percobaan koneksi SSH baru dari sumber yang sama dalam waktu 30 detik.
+    
+3. Deteksi Data Exfiltration (Pencurian Data)
+    
+```
+alert tcp $HOME_NET 80 -> $EXTERNAL_NET any (msg:"[ALERT] Indikasi Pencurian Data via HTTP (Exfiltration)"; flow:from_server,established; content:"HTTP/1."; content:"200 OK"; distance:0; sid:1003; rev:1; classtype:policy-violation;)
+```
+    
+Rule ini mendeteksi respons sukses HTTP (`200 OK`) yang mengalir keluar **dari** Server Riset (`$HOME_NET`) **menuju** Mahasiswa (`$EXTERNAL_NET`), yang mengindikasikan keberhasilan pengunduhan file/data.
 
 ---
 
