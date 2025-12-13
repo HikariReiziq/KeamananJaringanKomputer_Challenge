@@ -28,7 +28,7 @@ Departemen Teknologi Informasi ITS melaporkan adanya indikasi kebocoran data ber
 
 Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasikan. Topologi ini dirancang menggunakan prinsip **Defense in Depth** (Pertahanan Berlapis) dan **Modularitas** untuk menjamin keamanan, ketersediaan, dan kemudahan pengembangan.
 
-![Topologi Jaringan](/Assets/topologi.png)
+![Topologi Jaringan](/Assets/topologiKJKFP.png)
 **Lokasi IDS:** Node Terpisah (Out-of-Band) yang terhubung ke interface `eth6` pada **Core Router**.
 **Alasan Pemilihan (Traffic Mirroring):**
 * **Visibilitas Sentral:** Core Router adalah titik temu antar-subnet (Mahasiswa ↔ Riset).
