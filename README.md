@@ -103,13 +103,16 @@ Rule ini mendeteksi paket ICMP Echo Request (itype:8) dan mencatatnya sebagai in
 1. Port Scanning (Nmap)
 
 Command:
-
 ```
-nmap -p 22,80,443 --open 10.20.30.10
+nmap -p 22,80 10.20.30.10
 ```
+![PortScanning](Assets/portscanning.png)
 
 Log Alert IDS:
-[masukin docum nmap raissa]
+![LogIDS](Assets/log-IDS-port-scanning.png)
+
+### KESIMPULAN:
+IDS Suricata berhasil mendeteksi aktivitas port scanning dari subnet Mahasiswa (10.20.10.0/24) menuju Server Riset (10.20.30.10) melalui **Rule SID 1001**. Serangan ini teridentifikasi karena Nmap mengirimkan lebih dari 5 paket SYN dalam waktu kurang dari 10 detik, memenuhi threshold yang telah dikonfigurasi. Alert yang muncul mengkonfirmasi bahwa penyerang sedang melakukan reconnaissance untuk mencari port terbuka (22 dan 80) sebagai tahap awal serangan. Deteksi ini sangat penting karena port scanning sering menjadi indikator awal dari serangan yang lebih kompleks seperti exploitation atau brute force.
 
 2. SSH Brute Force
 
@@ -118,30 +121,37 @@ Command:
 ```
 for i in {1..5}; do ssh -o ConnectTimeout=2 -o BatchMode=yes targetuser@10.20.30.10 "exit"; done
 ```
-[masukin docum ssh brutfor raissa]
+![BruteForce](Assets/percobaan-brute-force.png)
+
+Output Log IDS Brute Force:
+![LogIDSBruteFOrce](Assets/log-IDS-bruteforce.png)
+
+### KESIMPULAN:
+IDS berhasil mendeteksi percobaan brute force SSH terhadap Server Riset (10.20.30.10) melalui **Rule SID 1002**. Meskipun hanya dilakukan 5 kali percobaan login dalam simulasi ini, IDS sudah memicu alert setelah 3 percobaan koneksi SSH dalam waktu 30 detik. Ini menunjukkan bahwa sistem mampu mendeteksi pola serangan brute force secara dini sebelum penyerang berhasil menemukan kredensial yang valid. Alert ini mengklasifikasikan serangan sebagai **attempted-admin**, yang mengindikasikan upaya akses tidak sah ke sistem administratif. Deteksi cepat seperti ini memungkinkan administrator untuk segera mengambil tindakan preventif seperti memblokir IP penyerang atau menerapkan rate limiting pada layanan SSH.
 
 3. Data Exflitration (HTTP Wget)
-
 Command: 
-
 ```
 wget http://10.20.30.10/index.html
 ```
-[masukin docum data exfiltration raissa]
+![Exfiltration](Assets/pencurianData.png)
 
-Log Alert IDS:
+Output Log IDS Data Exfiltration:
+![Exfiltration](Assets/log-IDS-curi-data.png)
 
-[masukin docum data exfiltration_alert_ raissa]
+### KESIMPULAN:
+IDS berhasil mendeteksi aktivitas data exfiltration menggunakan **Rule SID 1003**. Dalam simulasi ini, command `wget` dijalankan dari subnet Mahasiswa (10.20.10.0/24) untuk mengunduh file `index.html` dari Server Riset (10.20.30.10). Meskipun **request** berasal dari Mahasiswa, yang terdeteksi oleh IDS adalah **response HTTP dari Server Riset** yang mengirimkan data kembali ke Mahasiswa (flow:from_server,established). Inilah yang dikategorikan sebagai **data exfiltration**, yaitu data yang keluar dari server menuju subnet yang tidak seharusnya mengaksesnya. Rule ini efektif mendeteksi transfer data mencurigakan karena memantau arah traffic dari server (bukan ke server). Namun, perlu dicatat bahwa rule ini hanya efektif untuk protokol HTTP (plaintext) dan tidak dapat mendeteksi exfiltration melalui HTTPS tanpa SSL inspection. Dalam skenario nyata, ini bisa mengindikasikan pencurian data sensitif seperti file konfigurasi, database, atau dokumen rahasia dari server.
 
 ---
 ## Hasil Analisis Singkat
 
-   Serangan Port Scanning adalah yang paling mudah dan cepat memicu alert. Hal ini karena Nmap mengirimkan paket SYN dalam jumlah masif dalam waktu sangat singkat, sehingga langsung memicu ambang batas (threshold) pada rule IDS tanpa ambiguitas.
-    
-   Dalam simulasi ini, false positive ditekan seminimal mungkin dengan mendefinisikan $HOME_NET dan $EXTERNAL_NET secara spesifik. Namun, rule Data Exfiltration berpotensi menghasilkan false positive jika Mahasiswa memang diizinkan mengakses halaman web publik di server Riset, karena setiap respon "200 OK" akan dianggap sebagai pencurian data. Perlu penyesuaian rule content (misal: hanya mendeteksi file .conf atau .pdf rahasia).
-    
-   **Enkripsi:** Saat ini deteksi exfiltration hanya bekerja pada HTTP (Plaintext). Jika Server Riset menggunakan HTTPS (Port 443), IDS tidak akan bisa membaca konten "200 OK" atau nama file tanpa melakukan *SSL Termination/Inspection*.
+Serangan **Port Scanning** adalah yang paling mudah dan cepat memicu alert karena Nmap mengirimkan paket SYN dalam jumlah masif dalam waktu sangat singkat, sehingga langsung memicu ambang batas (threshold) pada rule IDS tanpa ambiguitas. Dalam simulasi, hanya dengan scanning 2 port (22 dan 80), IDS langsung mendeteksi pola serangan karena jumlah paket SYN yang dikirim melebihi threshold 5 paket dalam 10 detik. Berbeda dengan SSH Brute Force yang memerlukan beberapa percobaan login, atau Data Exfiltration yang bergantung pada analisis konten paket, Port Scanning memiliki signature yang sangat jelas dan mudah diidentifikasi.
 
-   
-   **IPS:** Mengubah mode dari IDS (Deteksi) menjadi IPS (Pencegahan) agar Core Router dapat memblokir IP penyerang secara otomatis setelah alert muncul.
-an selanjutnya, sistem ini dapat ditingkatkan dengan mengintegrasikan Suricata dalam mode **IPS (Intrusion Prevention System)** agar dapat memblokir serangan DDoS secara otomatis tanpa intervensi manual, serta menggunakan **SIEM (Security Information and Event Management)** untuk sentralisasi log dari Firewall dan Core Router.
+Dalam simulasi ini, **false positive ditekan seminimal mungkin** dengan mendefinisikan `$HOME_NET` dan `$EXTERNAL_NET` secara spesifik, serta menggunakan threshold yang tepat untuk setiap jenis serangan. Namun, **rule Data Exfiltration (SID 1003)** berpotensi menghasilkan false positive jika subnet Mahasiswa memang diizinkan mengakses halaman web publik di Server Riset untuk keperluan akademik yang sah, karena setiap response HTTP dari server akan dianggap sebagai indikasi pencurian data. Solusi untuk meminimalkan false positive antara lain dengan menyesuaikan rule content untuk hanya mendeteksi file-file sensitif tertentu (misal: `.conf`, `.sql`, `.pdf` rahasia), menggunakan whitelist untuk IP yang sah, atau menambahkan korelasi dengan log autentikasi.
+
+Beberapa aspek yang perlu ditingkatkan untuk memperkuat sistem deteksi dan pencegahan meliputi: (1) **SSL/TLS Inspection** - saat ini deteksi exfiltration hanya bekerja pada HTTP plaintext, sehingga diperlukan SSL decryption untuk mendeteksi traffic HTTPS; (2) **Mode IPS** - mengubah dari IDS (Deteksi) menjadi IPS (Pencegahan) agar sistem dapat memblokir IP penyerang secara otomatis setelah alert muncul; (3) **SIEM Integration** - mengintegrasikan log dari IDS, Firewall, dan Core Router ke dalam sistem SIEM seperti ELK Stack untuk korelasi event dan analisis forensik yang lebih komprehensif; serta (4) **Threat Intelligence Feed** untuk mendeteksi IP atau domain berbahaya yang sudah dikenal secara global.
+
+---
+## Kesimpulan
+
+Implementasi IDS Suricata pada infrastruktur jaringan ITS berhasil mendeteksi ketiga jenis serangan yang disimulasikan: Port Scanning, SSH Brute Force, dan Data Exfiltration. Custom rules yang telah dikonfigurasi (SID 1001, 1002, dan 1003) terbukti efektif dalam mengidentifikasi pola serangan dengan threshold yang tepat, sehingga mampu memberikan alert secara real-time tanpa mengganggu performa jaringan. Port Scanning menjadi serangan yang paling mudah dan cepat terdeteksi karena signature-nya yang jelas, sementara Data Exfiltration memerlukan analisis konten paket yang lebih mendalam. Meskipun false positive masih berpotensi terjadi terutama pada rule exfiltration, hal ini dapat diminimalkan dengan penyesuaian rule yang lebih spesifik dan implementasi whitelist. Untuk meningkatkan efektivitas sistem keamanan, diperlukan pengembangan lebih lanjut seperti SSL/TLS Inspection untuk mendeteksi traffic terenkripsi, upgrade ke mode IPS untuk pencegahan otomatis, serta integrasi dengan SIEM untuk monitoring dan analisis yang lebih komprehensif. Dengan demikian, sistem IDS ini telah membuktikan kemampuannya sebagai lapisan pertahanan tambahan yang penting dalam arsitektur Defense in Depth jaringan kampus ITS.
