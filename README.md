@@ -31,7 +31,7 @@ Berikut adalah desain akhir infrastruktur jaringan yang telah kami implementasik
 ![Topologi Jaringan](/Assets/topologi.png)
 **Lokasi IDS:** Node Terpisah (Out-of-Band) yang terhubung ke interface `eth6` pada **Core Router**.
 **Alasan Pemilihan (Traffic Mirroring):**
-* **Visibilitas Sentral:** Core Router adalah titik temu antar-subnet (Mahasiswa XXX Riset).
+* **Visibilitas Sentral:** Core Router adalah titik temu antar-subnet (Mahasiswa ↔ Riset).
 * **Kinerja:** Memisahkan IDS dari jalur utama (bukan inline) menjaga throughput jaringan tetap stabil.
 
 ### Komponen Utama Topologi:
