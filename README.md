@@ -100,7 +100,7 @@ Rule ini mendeteksi paket ICMP Echo Request (itype:8) dan mencatatnya sebagai in
 ---
 ## Simulasi Serangan
 
-1. Port Scanning (Nmap)
+### 1. Port Scanning (Nmap)
 
 Command:
 ```
@@ -111,10 +111,10 @@ nmap -p 22,80 10.20.30.10
 Log Alert IDS:
 ![LogIDS](Assets/log-IDS-port-scanning.png)
 
-### KESIMPULAN:
+#### KESIMPULAN:
 IDS Suricata berhasil mendeteksi aktivitas port scanning dari subnet Mahasiswa (10.20.10.0/24) menuju Server Riset (10.20.30.10) melalui **Rule SID 1001**. Serangan ini teridentifikasi karena Nmap mengirimkan lebih dari 5 paket SYN dalam waktu kurang dari 10 detik, memenuhi threshold yang telah dikonfigurasi. Alert yang muncul mengkonfirmasi bahwa penyerang sedang melakukan reconnaissance untuk mencari port terbuka (22 dan 80) sebagai tahap awal serangan. Deteksi ini sangat penting karena port scanning sering menjadi indikator awal dari serangan yang lebih kompleks seperti exploitation atau brute force.
 
-2. SSH Brute Force
+### 2. SSH Brute Force
 
 Command:
 
@@ -126,10 +126,10 @@ for i in {1..5}; do ssh -o ConnectTimeout=2 -o BatchMode=yes targetuser@10.20.30
 Output Log IDS Brute Force:
 ![LogIDSBruteFOrce](Assets/log-IDS-bruteforce.png)
 
-### KESIMPULAN:
+#### KESIMPULAN:
 IDS berhasil mendeteksi percobaan brute force SSH terhadap Server Riset (10.20.30.10) melalui **Rule SID 1002**. Meskipun hanya dilakukan 5 kali percobaan login dalam simulasi ini, IDS sudah memicu alert setelah 3 percobaan koneksi SSH dalam waktu 30 detik. Ini menunjukkan bahwa sistem mampu mendeteksi pola serangan brute force secara dini sebelum penyerang berhasil menemukan kredensial yang valid. Alert ini mengklasifikasikan serangan sebagai **attempted-admin**, yang mengindikasikan upaya akses tidak sah ke sistem administratif. Deteksi cepat seperti ini memungkinkan administrator untuk segera mengambil tindakan preventif seperti memblokir IP penyerang atau menerapkan rate limiting pada layanan SSH.
 
-3. Data Exflitration (HTTP Wget)
+### 3. Data Exflitration (HTTP Wget)
 Command: 
 ```
 wget http://10.20.30.10/index.html
@@ -139,7 +139,7 @@ wget http://10.20.30.10/index.html
 Output Log IDS Data Exfiltration:
 ![Exfiltration](Assets/log-IDS-curi-data.png)
 
-### KESIMPULAN:
+#### KESIMPULAN:
 IDS berhasil mendeteksi aktivitas data exfiltration menggunakan **Rule SID 1003**. Dalam simulasi ini, command `wget` dijalankan dari subnet Mahasiswa (10.20.10.0/24) untuk mengunduh file `index.html` dari Server Riset (10.20.30.10). Meskipun **request** berasal dari Mahasiswa, yang terdeteksi oleh IDS adalah **response HTTP dari Server Riset** yang mengirimkan data kembali ke Mahasiswa (flow:from_server,established). Inilah yang dikategorikan sebagai **data exfiltration**, yaitu data yang keluar dari server menuju subnet yang tidak seharusnya mengaksesnya. Rule ini efektif mendeteksi transfer data mencurigakan karena memantau arah traffic dari server (bukan ke server). Namun, perlu dicatat bahwa rule ini hanya efektif untuk protokol HTTP (plaintext) dan tidak dapat mendeteksi exfiltration melalui HTTPS tanpa SSL inspection. Dalam skenario nyata, ini bisa mengindikasikan pencurian data sensitif seperti file konfigurasi, database, atau dokumen rahasia dari server.
 
 ---
